@@ -19,3 +19,10 @@ __pycache__/
 
 # Windows
 Thumbs.db
+
+# Generated OpenCV output images
+datasets/cropped.jpg
+datasets/flip.jpg
+datasets/pipeline.jpg
+datasets/resized.jpg
+datasets/rotated_90.jpg
