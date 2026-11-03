@@ -1,0 +1,36 @@
+# Architecture
+
+The local app is a single FastAPI process serving static HTML/CSS/JavaScript and JSON routes. OpenCV decodes uploaded media; Ultralytics YOLO performs local inference. SQLite stores event metadata and detection JSON; server-generated UUIDs name annotated previews.
+
+```text
+Primary workflow: Browser video -> sampled paused frame -> vehicle YOLO + pothole segmentation + driver/lane/risk modules -> exact timestamp results -> overlay/timeline
+Secondary: Event history and Model Registry diagnostics
+```
+
+## Offline upload inference
+
+Images use `/api/infer/image`; videos use `/api/infer/video`. The async endpoint reads/validates uploads and offloads model inference plus video decoding to FastAPI's thread pool. Video processing decodes frames sequentially and invokes inference at indices `0, interval, 2*interval, ...` (dashboard interval 15). Detection records aggregate frame-level model outputs and are not deduplicated into object tracks. The API stores decode count, sampled calls, container-reported source frame count, detections per class, thresholds, model filename, loop time and average model-call latency. Completion is `partial` when decode count is less than the container count and `finished_unverified` when the container has no usable count. Legacy data retains unknown metrics as null.
+
+The optional video modules run at those same sampled timestamps. MediaPipe face landmarks produce a face-visible/multiple-face/eye-closure result, never an impairment diagnosis. The OpenCV lane baseline returns image-space lines only when its estimates meet a basic left/right geometric-consistency check; it does not output steering commands. `CollisionRiskEngine` receives temporally sampled vehicle detections with timestamps, confidence, tracked box growth, and normalized image-plane center movement. On pothole-selected video it invokes the vehicle model separately for risk inputs. It may emit a potential-forward-obstacle indicator with evidence, or `UNAVAILABLE` when timestamps/confidence/freshness are inadequate. It never calculates TTC or crash probability.
+
+## Simulated-live replay
+
+The homepage provides the only video workflow. The prerecorded source plays locally through a browser object URL; the original file is not uploaded and no camera/microphone access is requested. At a configured 2/4/8 Hz sample the page sends a compressed frame, media timestamp, monotonically increasing browser-presented-frame ID, and dimensions while playback continues. The API validates ordering and executes only modules selected by the session profile. Road-scene models are skipped for driver-facing sessions; optional driver/lane/risk components run only when selected. Pothole failure is isolated and returned in a capability status. Responses identify the detections' model and include per-frame module observations. Playback continues independently of inference. The browser permits only one in-flight request and skips due sample slots while that request is busy, preventing an inference queue from building up. Skipped slots are counted in the live simulation summary. Results retain their source timestamp; bounding-box overlays are shown only when the matching source frame is paused and still current, so late inference results are never drawn over a later frame. Seeking is disabled while active.
+
+Stop/end/error persists genuine detection instances from both configured models, per-class totals, browser-reported frame presentations, sampled calls, average pipeline latency, elapsed replay time, model/configuration, risk assessments, per-frame module status, and the final annotated preview. Browser presentation counters are not a container-verified source-frame total. Session state is process-local, bounded, expires after an hour, and is lost on process restart. Restart discards the prior session and creates a new one. Repeated pothole/risk timeline entries are deduplicated with timestamp cooldowns.
+
+The experimental risk engine associates same-class vehicle bounding boxes across samples by IoU. It may emit a cautious forward-obstacle indicator after at least three observations show sufficient apparent bounding-box growth, area, centered position and configured confidence. Evidence includes elapsed media time and normalized image-plane center movement. Long observation gaps, low confidence and stale inference yield `UNAVAILABLE`. It does not infer calibrated distance, speed, time-to-collision, crash probability or safety; no alert does not mean the road is clear.
+
+The app uses lazy local model caching. SQLite is for a local single-process demo. Production needs authentication/tenant isolation, production database and migrations, durable job processing, object storage, retention/deletion controls, rate limiting, monitoring and validated models.
+
+Configuration is environment-based (`AUTOVISION_DATA_DIR`, upload cap, CORS origins and model paths). Uploaded filenames are reduced to display basenames; preview filenames are server-generated. Supported extension, size, decoded content and offline-video duration are checked.
+
+## Universal uploaded-video profiles (2026-10-28)
+
+The primary workflow is now labelled AI Video Simulation and accepts supported prerecorded clips regardless of whether they came from a dashcam, phone, cabin camera, or another recording source. The browser decodes the selected file locally through a blob URL and sends only sequential sampled JPEG frames to the shared `/api/simulation/{id}/frame` pipeline. It reports browser-decoded width, height, orientation class, and duration; CSS containment and the overlay coordinate transform preserve portrait/landscape aspect ratio. Browser decoder support determines actual container/codec compatibility. No camera permissions or capture APIs are used.
+
+The selected profile is sent to `/api/simulation/start`: `road_facing` enables road-oriented vehicle/pothole/lane/risk processing; `driver_facing` enables only driver monitoring and avoids initializing road models; `mixed` enables both groups; `automatic` and `general` run both groups while presenting an observational assessment. Automatic is not a trained scene classifier. The session assessment reports road-specific class/lane cues and visible-face landmark observations across sampled frames. No cue does not establish that a feature is absent, and profile choice does not force detections. `profile_assessment` is returned with each frame and retained in per-frame session history.
+
+The frame API contract is input-source neutral: a future camera adapter can submit the same frame bytes, timestamp, frame identity, and dimensions, while sharing module inference and event logic. Direct camera recording is intentionally not implemented.
+
+Repository video samples inspected with OpenCV metadata: `datasets/samplevid.mp4` is 848×478, ~24.96 FPS, 1,000 reported frames; the pothole sample is 1280×720, 25 FPS, 375 reported frames. Both are landscape MP4. No representative portrait, driver-facing, mixed-view, VFR, rotated-metadata, or corrupted-video corpus was available to verify. The browser path relies on the browser's orientation-aware decode; orientation metadata behavior varies by browser. Do not treat the landscape samples as validation for mobile portrait/cabin scenarios.

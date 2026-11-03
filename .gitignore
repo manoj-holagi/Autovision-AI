@@ -1,28 +1,61 @@
-# Virtual Environment
+# Virtual Environments
 .venv/
+.venv*/
+venv/
+env/
+.venv312/
 
 # Python Cache
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Environment Variables
+# Environment Variables and Secrets
 .env
+.env.*
+!.env.example
 
-# VS Code Settings
+# IDE Settings
 .vscode/
+.idea/
 
 # Jupyter
 .ipynb_checkpoints/
 
-# macOS
+# Operating System
 .DS_Store
-
-# Windows
 Thumbs.db
+Desktop.ini
 
-# Generated OpenCV output images
+# Generated OpenCV Output Images
 datasets/cropped.jpg
 datasets/flip.jpg
 datasets/pipeline.jpg
 datasets/resized.jpg
 datasets/rotated_90.jpg
+
+# Runtime Media and Local Database
+data/
+uploads/
+outputs/
+temp/
+tmp/
+*.log
+
+# Frontend Dependencies and Build
+node_modules/
+dist/
+build/
+
+# Test and Coverage Reports
+.coverage
+htmlcov/
+
+# Local Python Artifacts
+*.egg-info/
+
+# Note:
+# Do not ignore required model weights or datasets automatically.
+# Review their size and licensing before uploading.

@@ -1,0 +1,24 @@
+services:
+  autovision:
+    build: .
+    ports:
+      - "8001:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      AUTOVISION_DATA_DIR: /data
+      VEHICLE_MODEL_PATH: /models/yolo26n.pt
+      POTHOLE_MODEL_PATH: /models/best.pt
+      CORS_ORIGINS: http://localhost:8001,http://127.0.0.1:8001
+    volumes:
+      - autovision-data:/data
+      - ./yolo26n.pt:/models/yolo26n.pt:ro
+      - ./runs/segment/runs/pothole/pothole_seg_test/weights/best.pt:/models/best.pt:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  autovision-data:
